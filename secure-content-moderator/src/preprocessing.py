@@ -9,8 +9,8 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Loading data
-data = pd.read_csv('../data/raw/train.csv.zip')
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
 
  
 # remove the stopwords detector/option later just have it for now to experiment with later 
@@ -39,21 +39,68 @@ def clean_text(text: str, remove_stopwords: bool = False) -> str:
         
     return text
 
+if __name__ == "__main__":
+    # Train/Test Split - splitting data into training and testing sets 
 
-# Train/Test Split - splitting data into training and testing sets 
+    # Loading data
+    data = pd.read_csv('../data/raw/train.csv.zip')
 
-label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
-# creating a new column of cleaned text - applying clean_text function to each column of 'comment_text'
-data['comment_text_clean'] = data['comment_text'].apply(clean_text)
+    # creating a new column of cleaned text - applying clean_text function to each column of 'comment_text'
+    data['comment_text_clean'] = data['comment_text'].apply(clean_text)
 
-# train_test_split function from sklearn splits the data into training and testing sets with 80% of the data used for training and 20% for testing. The random_state parameter ensures reproducibility of the split.
-# 'X' is the input features, 'Y' is the labels 
-X_train, X_test, y_train, y_test = train_test_split(
- data['comment_text_clean'],
- data[label_cols],
- test_size = 0.2, # 20% of data for testing, 80% for training 
- random_state = 1 
+    # train_test_split function from sklearn splits the data into training and testing sets with 80% of the data used for training and 20% for testing. The random_state parameter ensures reproducibility of the split.
+    # 'X' is the input features, 'Y' is the labels 
+    X_train, X_test, y_train, y_test = train_test_split(
+        data['comment_text_clean'],
+        data[label_cols],
+        test_size = 0.2, # 20% of data for testing, 80% for training 
+        random_state = 1 
 
-)
+    )
+
+    # TF-IDF Vectorization 
+    vectorizer = TfidfVectorizer(
+        max_features=50000, 
+        ngram_range=(1, 2), 
+        min_df=3, 
+        max_df=0.9, 
+        sublinear_tf=True )
+
+    X_train_tfidf = vectorizer.fit_transform(X_train) # Fit on training data
+    X_test_tfidf = vectorizer.transform(X_test) # Transform test data
 
 
+    s3 = boto3.client('s3')
+    BUCKET = 'secure-content-moderator-ranith-992382735117-ap-southeast-2-an'
+
+    buffer = io.BytesIO()
+    joblib.dump(vectorizer, buffer)
+    buffer.seek(0)
+    s3.upload_fileobj(buffer, BUCKET, 'artifacts/vectorizer.joblib')
+
+    # Save processed data
+    # (similarly for train/test splits)
+
+    # Save X_train
+    buffer = io.BytesIO()
+    joblib.dump(X_train, buffer)
+    buffer.seek(0)
+    s3.upload_fileobj(buffer, BUCKET, 'data/processed/X_train.joblib')
+
+    # Save X_test
+    buffer = io.BytesIO()
+    joblib.dump(X_test, buffer)
+    buffer.seek(0)
+    s3.upload_fileobj(buffer, BUCKET, 'data/processed/X_test.joblib')
+
+    # Save y_train
+    buffer = io.BytesIO()
+    joblib.dump(y_train, buffer)
+    buffer.seek(0)
+    s3.upload_fileobj(buffer, BUCKET, 'data/processed/y_train.joblib')
+
+    # Save y_test
+    buffer = io.BytesIO()
+    joblib.dump(y_test, buffer)
+    buffer.seek(0)
+    s3.upload_fileobj(buffer, BUCKET, 'data/processed/y_test.joblib')
