@@ -66,7 +66,8 @@ if __name__ == "__main__":
         max_df=0.9, 
         sublinear_tf=True )
 
-    X_train_tfidf = vectorizer.fit_transform(X_train) # Fit on training data
+    # use fit_transform on training data only, fit calculates rarity values for training data to carry over to testing data
+    X_train_tfidf = vectorizer.fit_transform(X_train) # Fit on training data - converted into numbers
     X_test_tfidf = vectorizer.transform(X_test) # Transform test data
 
 
