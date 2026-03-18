@@ -28,4 +28,6 @@ Confusion Matrix: Table showing where model succeeds and fails.
 
 Multi-label classification: each text can have multiple labels.
 
+Binary classifier: model making a decision wherein there exists two exact outcomes (yes/no) - logistic regression
+
 - Ranith Simanmeru Pathiranage
