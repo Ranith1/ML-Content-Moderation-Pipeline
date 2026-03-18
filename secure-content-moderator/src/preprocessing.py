@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # Train/Test Split - splitting data into training and testing sets 
 
     # Loading data
-    data = pd.read_csv('../data/raw/train.csv.zip')
+    data = pd.read_csv('data/raw/train.csv.zip')
 
     # creating a new column of cleaned text - applying clean_text function to each column of 'comment_text'
     data['comment_text_clean'] = data['comment_text'].apply(clean_text)
@@ -82,15 +82,15 @@ if __name__ == "__main__":
     # Save processed data
     # (similarly for train/test splits)
 
-    # Save X_train
+    # Save X_train_tfidf 
     buffer = io.BytesIO()
-    joblib.dump(X_train, buffer)
+    joblib.dump(X_train_tfidf, buffer)
     buffer.seek(0)
     s3.upload_fileobj(buffer, BUCKET, 'data/processed/X_train.joblib')
 
-    # Save X_test
+    # Save X_test_tfidf 
     buffer = io.BytesIO()
-    joblib.dump(X_test, buffer)
+    joblib.dump(X_test_tfidf, buffer)
     buffer.seek(0)
     s3.upload_fileobj(buffer, BUCKET, 'data/processed/X_test.joblib')
 
