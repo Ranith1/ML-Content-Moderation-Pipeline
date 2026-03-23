@@ -209,5 +209,10 @@ __marimo__/
 # Project
 data/raw/
 
+lambda_package/
+lambda_deployment.zip
+lambda_layer/
+lambda_layer.zip
+
 .DS_Store
 **/.DS_Store
