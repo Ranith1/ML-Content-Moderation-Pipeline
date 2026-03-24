@@ -214,5 +214,7 @@ lambda_deployment.zip
 lambda_layer/
 lambda_layer.zip
 
+models/
+
 .DS_Store
 **/.DS_Store
