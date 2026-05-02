@@ -6,6 +6,8 @@ import joblib
 import io
 import logging
 import hashlib
+import time
+cloudwatch = boto3.client('cloudwatch')
 
 from input_sanitizer import sanitize_input
 from pii_detector import detect_pii, scrub_pii
@@ -51,6 +53,8 @@ def load_models():
             models[label] = joblib.load(buf)
 
 def handler(event, context):
+    start_time = time.time()
+    
     load_models()
     
     # validate request body exists
@@ -64,7 +68,7 @@ def handler(event, context):
         logger.warning(f'Rejected request: body too large ({len(raw_body)} bytes)')
         return {'statusCode': 400, 'body': json.dumps({'error': 'Request body too large'})}
     
-    ## parse JSON
+    # parse JSON
     try:
         body = json.loads(raw_body)
     except json.JSONDecodeError:
@@ -83,15 +87,17 @@ def handler(event, context):
         logger.warning(f'Rejected request: invalid text length ({len(text)})')
         return {'statusCode': 400, 'body': json.dumps({'error': 'Invalid input'})}
 
-    # Sanitize for adversarial inputs (7A)
+    # sanitize for adversarial inputs (7A)
     sanitized = sanitize_input(text)
     if sanitized['evasion_detected']:
         logger.warning(f'Evasion attempt detected: unicode_normalized={sanitized["unicode_normalized"]}')
-    
-    # check and scrub PII 
+        emit_metric('EvasionAttempts', 1)
+
+    # check and scrub PII
     pii_found = detect_pii(text)
     if pii_found:
         logger.warning(f'PII detected in request: {list(pii_found.keys())}')
+        emit_metric('PIIDetected', 1)
         text = scrub_pii(text)
 
     # use sanitized text for classification
@@ -107,11 +113,20 @@ def handler(event, context):
         prob = models[label].predict_proba(text_vec)[0][1]
         predictions[label] = {'score': round(float(prob), 4), 'flagged': bool(prob > 0.5)}
 
+    # emit metrics
+    elapsed_ms = (time.time() - start_time) * 1000
+    emit_metric('PredictionLatency', elapsed_ms, 'Milliseconds')
+
+    any_flagged = any(p['flagged'] for p in predictions.values())
+    if any_flagged:
+        emit_metric('FlaggedContent', 1)
+
     logger.info(json.dumps({
         'text_length': len(text),
-        'any_flagged': any(p['flagged'] for p in predictions.values()),
+        'any_flagged': any_flagged,
         'evasion_detected': sanitized['evasion_detected'],
-        'pii_detected': bool(pii_found)
+        'pii_detected': bool(pii_found),
+        'latency_ms': round(elapsed_ms, 2)
     }))
 
     return {
@@ -133,3 +148,17 @@ def load_manifest():
     s3.download_fileobj(BUCKET, 'models/manifest.json', buf)
     buf.seek(0)
     return json.loads(buf.read().decode('utf-8'))
+
+# emit a custom metric to cloudwatch for monitoring purposes 
+def emit_metric(name, value, unit='Count'):
+    try:
+        cloudwatch.put_metric_data(
+            Namespace='ContentModerator',
+            MetricData=[{
+                'MetricName': name,
+                'Value': value,
+                'Unit': unit
+            }]
+        )
+    except Exception as e:
+        logger.error(f'Failed to emit metric {name}: {e}')
