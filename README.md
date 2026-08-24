@@ -62,8 +62,12 @@ A probability and flag for each of the six toxicity labels should be outputted.
 Sample inputs:
 
 "the weather is nice" - Clean text
+
 "you are an idiot" - Multi-label output: toxic, obscene and insult
+
 "y0u 4r3 4n 1d10t" - Leetspeak evasion is decoded before classification.
+
 "email me at random@example.com idiot" - Email is redacted before the request touches CloudWatch
+
 {"text": 123} - Input validaiton rejects non-string types with a 400.
 
