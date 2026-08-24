@@ -1,33 +1,69 @@
 # ML-Content-Moderation-Pipeline
 
-The below give context to an end-to-end toxic content classification pipeline: 
+## Overview
+Secure content moderation pipeline that classifies text across six toxicity categories. Trained on 160k labelled Wikipedia documents, deployed on AWS lambda behind API gateway, with security meatures against adversarial evasion, model tampering and API abuse.
 
-Text Classification: given some text, assign it a label (toxic, obscene, threatening). The model learns patterns from labelled examples, then predicts labels for new and unseen text (generalisation).
+The project prioritises production and security: least-privilege IAM, encryption at rest and in transit, SHA-256 model integrity verification, adversarial input sanitisation, PII scrubbing and custom Cloudwatch observability.
 
-Structure:
-1. Data Collection - using a public dataset
-2. Preprocessing - cleaning the text
-3. Feature extraction - using TF-IDF
-4. Model training
-5. Evaluation
-6. Deployment 
+## Tech stack
 
-The following concepts will be covered:
+**ML**: Python 3.13, scikit-learn, pandas, numpy, matplotlib
+**AWS**: Lambda (arm64/Graviton), API Gateway, Cloudwatch, IAM
+**Tooling**: boto3, joblib, pytest
 
-TF-IDF: Term Frequency-Inverse Document Frequency, converts text to numbers by measuring how important a word is in a document releative to all documents - turns words into something a model can process.
+Lambda runs on arm64 Graviton. Dependencies are packages as a Lambda Layer built for linus/arm64.
 
-Logistic Regression: algorithm used to create a decision boundary/threshold to separate classes.
+## Running Locally
+Requires Python 3.13, an AWS account and a Kaggle account.
 
-Precision: e.g. of all items flagged toxic by the model, how many actually were
+```bash
+git clone https://github.com/Ranith1/ML-Content-Moderation-Pipeline.git
+cd ML-Content-Moderation-Pipeline
 
-Recall: of all toxic items, how many were caught by the model?
+python -m venv venv
+source venv/bin/activate          
+pip install -r requirements.txt
+```
 
-F1: number that balanced both of the above. 
+**Dataset** Download train.csv.zip from: https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data
+Place it in data/raw/.
 
-Confusion Matrix: Table showing where model succeeds and fails. 
+**S3 bucket** Create a bucket in ap-southeast-2 with block-public access on, SSE-S3 encryption and versioning enabled. Update the BUCKET constant in src/preprocessing.py, src/train.py, src/evaluate.py and scripts/verify_integrity.py.
 
-Multi-label classification: each text can have multiple labels.
+**Run the pipeline**
 
-Binary classifier: model making a decision wherein there exists two exact outcomes (yes/no) - logistic regression
+```bash
+python src/preprocessing.py        # clean, split, vectorise, upload to S3
+python src/train.py                # train 6 classifiers, upload to S3
+python src/evaluate.py             # generate confusion matrices
+python scripts/verify_integrity.py # generate and upload SHA-256 manifest
+```
 
-- Ranith Simanmeru Pathiranage
+**Run the tests**
+
+```bash
+pytest tests/ -v
+```
+
+## Testing
+Paste the below API call into the terminal:
+
+```bash
+curl -X POST https://t3acn677t1.execute-api.ap-southeast-2.amazonaws.com/prod/predict \
+  -H 'Content-Type: application/json' \
+  -H 'x-api-key: thtHQlWY2CiEUXcP8WGV77SewpsdWvY7PEYJ2c1d' \
+  -d '{"text": "you are an idiot"}'
+```
+A probability and flag for each of the six toxicity labels should be outputted.
+
+**Endpoint** POST /predict
+**Auth** x-api-key header required
+
+Sample inputs:
+
+"the weather is nice" - Clean text
+"you are an idiot" - Multi-label output: toxic, obscene and insult
+"y0u 4r3 4n 1d10t" - Leetspeak evasion is decoded before classification.
+"email me at random@example.com idiot" - Email is redacted before the request touches CloudWatch
+{"text": 123} - Input validaiton rejects non-string types with a 400.
+
